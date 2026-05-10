@@ -1,8 +1,8 @@
-# MediaPipe Object Detection example with Raspberry Pi
+# MediaPipe Object Detection and Image Classification with Raspberry Pi
 
 This example uses [MediaPipe](https://github.com/google/mediapipe) with Python on
-a Raspberry Pi to perform real-time object detection using images streamed from
-the Pi Camera. It draws a bounding box around each detected object in the camera
+a Raspberry Pi to perform real-time object detection and image classification using images streamed from
+a phone camera. It draws a bounding box around each detected object in the camera
 preview (when the object score is above a given threshold).
 
 ## Set up your hardware
@@ -14,11 +14,6 @@ with Raspberry 64-bit Pi OS (preferably updated to Buster).
 You also need to [connect and configure the Pi Camera](
 https://www.raspberrypi.org/documentation/configuration/camera.md) if you use
 the Pi Camera. This code also works with USB camera connect to the Raspberry Pi.
-
-And to see the results from the camera, you need a monitor connected
-to the Raspberry Pi. It's okay if you're using SSH to access the Pi shell
-(you don't need to use a keyboard connected to the Pi)—you only need a monitor
-attached to the Pi to see the camera stream.
 
 ## Install MediaPipe
 
