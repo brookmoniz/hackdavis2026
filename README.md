@@ -1,69 +1,133 @@
-# MediaPipe Object Detection and Image Classification with Raspberry Pi
+# MediaPipe Object Detection and Image Classification on Raspberry Pi OS Lite
 
-This example uses [MediaPipe](https://github.com/google/mediapipe) with Python on
-a Raspberry Pi to perform real-time object detection and image classification using images streamed from
-a phone camera. It draws a bounding box around each detected object in the camera
-preview (when the object score is above a given threshold).
+This project uses [MediaPipe](https://github.com/google/mediapipe) with Python on a Raspberry Pi running **Raspberry Pi OS Lite** (headless, no display) to perform real-time object detection and image classification using a live stream from a mobile phone camera.
+
+Since there is no display, results are logged to stdout and annotated frames are periodically saved to disk.
+
+## Project structure
+
+```
+project/
+├── camera_utils.py      # Shared camera, logging, FPS, and file-saving utilities
+├── detect.py            # Object detection script
+├── classify.py          # Image classification script
+├── utils.py             # MediaPipe visualisation helper (bounding boxes)
+├── efficientdet.tflite  # Object detection model
+└── classifier.tflite    # Image classification model
+```
 
 ## Set up your hardware
 
-Before you begin, you need to
-[set up your Raspberry Pi](https://projects.raspberrypi.org/en/projects/raspberry-pi-setting-up)
-with Raspberry 64-bit Pi OS (preferably updated to Buster).
+[Set up your Raspberry Pi](https://projects.raspberrypi.org/en/projects/raspberry-pi-setting-up) with **Raspberry Pi OS Lite (64-bit)**.
 
-You also need to [connect and configure the Pi Camera](
-https://www.raspberrypi.org/documentation/configuration/camera.md) if you use
-the Pi Camera. This code also works with USB camera connect to the Raspberry Pi.
+No Pi Camera or USB camera is required. Instead, a mobile phone streams video to the Pi over Wi-Fi using an app such as:
 
-## Install MediaPipe
+- **IP Webcam** (Android) — streams to `http://<phone-ip>:8080/video`
+- **DroidCam** (Android / iOS) — streams to `http://<phone-ip>:4747/video`
 
-You can install the required dependencies using the setup.sh script provided with this project.
+Make sure the Pi and the phone are on the same Wi-Fi network. Note the stream URL shown in the app — you will pass it as `--source` when running the scripts.
 
-## Download the examples repository
+## Install dependencies
 
-First, clone this Git repo onto your Raspberry Pi.
+Run the setup script to install required packages and download the TFLite models:
 
-Run this script to install the required dependencies and download the TFLite models:
-
-```
-cd mediapipe/examples/object_detection/raspberry_pi
+```bash
+cd mediapipe/examples/raspberry_pi
 sh setup.sh
 ```
 
-## Run the example
+Or install manually:
+
+```bash
+pip install mediapipe opencv-python-headless
+```
+
+> Use `opencv-python-headless` instead of `opencv-python` — the headless build omits GUI dependencies that are unavailable on RPi OS Lite.
+
+## Run the scripts
+
+Both scripts can be run at the same time in separate terminals (or as separate systemd services). They share the same camera source and the same arguments.
+
+**Object detection:**
+```bash
+python3 detect.py --source http://192.168.1.x:4747/video
+```
+
+**Image classification:**
+```bash
+python3 classify.py --source http://192.168.1.x:4747/video
+```
+
+Replace `192.168.1.x` with your phone's actual IP address as shown in the streaming app.
+
+## Output
+
+Each script logs detections/classifications and FPS to stdout:
 
 ```
+12:00:01  INFO      Camera ready: 1280x720
+12:00:01  INFO      Object detection model loaded: efficientdet.tflite
+12:00:03  INFO      FPS=12.4  Detections: person (92%), cup (81%)
+```
+
+Annotated frames are saved as numbered JPEGs in the output directory every N frames:
+
+```
+output_detect/frame_00000030.jpg
+output_detect/frame_00000060.jpg
+...
+```
+
+## Arguments
+
+All arguments are the same for both `detect.py` and `classify.py` unless noted.
+
+| Argument | Description | Default |
+|---|---|---|
+| `--source` | Camera source: device index (e.g. `0`) or stream URL (e.g. `http://192.168.1.x:4747/video`) | `0` |
+| `--model` | Path to the TFLite model file | `efficientdet.tflite` / `classifier.tflite` |
+| `--maxResults` | Maximum number of results to return | `5` |
+| `--scoreThreshold` | Minimum score to include a result | `0.25` (detect) / `0.0` (classify) |
+| `--frameWidth` | Capture width in pixels (V4L2/USB only, ignored for streams) | `1280` (detect) / `640` (classify) |
+| `--frameHeight` | Capture height in pixels (V4L2/USB only, ignored for streams) | `720` (detect) / `480` (classify) |
+| `--outputDir` | Directory to save annotated frames | `output_detect` / `output_classify` |
+| `--saveEvery` | Save an annotated frame every N frames. Set to `0` for log-only mode | `30` |
+
+### Example with all arguments
+
+```bash
 python3 detect.py \
-  --model efficientdet_lite0.tflite
+  --source http://192.168.1.x:4747/video \
+  --model efficientdet.tflite \
+  --maxResults 5 \
+  --scoreThreshold 0.3 \
+  --outputDir output_detect \
+  --saveEvery 30
 ```
 
-You should see the camera feed appear on the monitor attached to your Raspberry
-Pi. Put some objects in front of the camera, like a coffee mug or keyboard, and
-you'll see boxes drawn around those that the model recognizes, including the
-label and score for each. It also prints the number of frames per second (FPS)
-at the top-left corner of the screen. As the pipeline contains some processes
-other than model inference, including visualizing the detection results, you can
-expect a higher FPS if your inference pipeline runs in headless mode without
-visualization.
+```bash
+python3 classify.py \
+  --source http://192.168.1.x:4747/video \
+  --model classifier.tflite \
+  --maxResults 5 \
+  --scoreThreshold 0.1 \
+  --outputDir output_classify \
+  --saveEvery 30
+```
 
-*   You can optionally specify the `model` parameter to set the TensorFlow Lite
-    model to be used:
-    *   The default value is `efficientdet_lite0.tflite`
-    *   TensorFlow Lite object detection models **with metadata**  
-        * Models from [MediaPipe Models](https://developers.google.com/mediapipe/solutions/vision/object_detector/index#models)
-        * Models trained with [MediaPipe Model Maker](https://developers.google.com/mediapipe/solutions/customization/object_detector) are supported.
-*   You can optionally specify the `maxResults` parameter to limit the list of
-    detection results:
-    *   Supported value: A positive integer.
-    *   Default value: `5`
-*   You can optionally specify the `scoreThreshold` parameter to adjust the
-    score threshold of detection results:
-    *   Supported value: A floating-point number.
-    *   Default value: `0.25`.
-*   Example usage:
-    ```
-    python3 detect.py \
-      --model efficientdet_lite0.tflite \
-      --maxResults 5 \
-      --scoreThreshold 0.3
-    ```
+## Supported models
+
+**Object detection** (`detect.py`):
+- Models from [MediaPipe Models](https://developers.google.com/mediapipe/solutions/vision/object_detector/index#models)
+- Models trained with [MediaPipe Model Maker](https://developers.google.com/mediapipe/solutions/customization/object_detector)
+- Default: `efficientdet.tflite`
+
+**Image classification** (`classify.py`):
+- Models from [MediaPipe Models](https://developers.google.com/mediapipe/solutions/vision/image_classifier/index#models)
+- Default: `classifier.tflite`
+
+All models must include MediaPipe metadata.
+
+## Stopping the scripts
+
+Press `Ctrl+C` in the terminal, or send `SIGTERM` if running as a service. Both scripts handle shutdown cleanly — the camera and model are released before the process exits.
